@@ -604,6 +604,6 @@ The current stack is a working prototype. A production-grade version would addre
 
 Built by [Paddy Zhao](https://paddyzz.github.io/) — Software Engineer based in Sydney, Australia.
 
-- Personal site: [paddyzz.github.io](https://paddyzz.github.io/)
-- LinkedIn: [linkedin.com/in/jiahe-paddy-zhao-213b24300](https://www.linkedin.com/in/jiahe-paddy-zhao-213b24300)
-- Email: paddyzhao0209@gmail.com
+- Personal site: [./](https://paddyzz.github.io/)
+- LinkedIn: [LinkedIn](https://www.linkedin.com/in/jiahe-paddy-zhao-213b24300)
+- Email: <paddyzhao0209@gmail.com>
