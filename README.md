@@ -10,12 +10,12 @@ GoodGute is a full-stack AI translation system that delivers accurate, professio
 ## Table of Contents
 
 - [Background](#Background)
-- [System Architecture](#System_Architecture)
-- [Tech Stack Used](#Tech_Stack)
-- [Model_Selection](#model-selection-why-helsinki-nlp-opus-mt-en-de-over-gpt)
+- [System Architecture](#System-Architecture)
+- [Tech Stack Used](#Tech-Stack)
+- [Model Selection](#model-selection-why-helsinki-nlp-opus-mt-en-de-over-gpt)
 - [Features](#Features)
 - [Engineering Challenges & Design Decisions](#engineering-challenges--design-decisions)
-- [Honest notes](#known-limitations-and-honest-engineering-notes)
+- [Known Limitations](#known-limitations-and-honest-engineering-notes)
 - [Planned Architecture Upgrade](#planned-architecture-upgrade)
 - [About](#about)
 ---
@@ -28,7 +28,7 @@ Perplexity API is used separately as a **translation quality evaluator**, not as
 
 ---
 
-## System_Architecture
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -59,7 +59,7 @@ Perplexity API is used separately as a **translation quality evaluator**, not as
 
 ---
 
-## Tech_Stack
+## Tech Stack
 
 | Layer | Technology | Reason |
 |-------|-----------|--------|
