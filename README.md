@@ -606,4 +606,4 @@ Built by [Paddy Zhao](https://paddyzz.github.io/) — Software Engineer based in
 
 - Personal site: [./](https://paddyzz.github.io/)
 - LinkedIn: [LinkedIn](https://www.linkedin.com/in/jiahe-paddy-zhao-213b24300)
-- Email: <paddyzhao0209@gmail.com>
+- Email: [Email me](mailto:paddyzhao0209@gmail.com)
