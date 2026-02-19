@@ -1,15 +1,24 @@
 # GoodGute — AI-Powered English to German Translation System
 
 [![Web App](https://img.shields.io/badge/Web-goodgute.app-blue)](https://www.goodgute.app/)
-[![CLI](https://img.shields.io/badge/PyPI-goodgute-green)](https://www.goodgute.dev/)
-[![CLI on PyPI](https://img.shields.io/badge/PyPI-goodgute-green)](https://pypi.org/project/goodgute/)
+[![CLI Dev](https://img.shields.io/badge/CLI-goodgute.dev-green)](https://www.goodgute.dev/)
+[![CLI on PyPI](https://img.shields.io/badge/PyPI-goodgute-00A3A3)](https://pypi.org/project/goodgute/)
 [![Model](https://img.shields.io/badge/Model-Helsinki--NLP%2Fopus--mt--en--de-yellow)](https://huggingface.co/Helsinki-NLP/opus-mt-en-de)
 
 GoodGute is a full-stack AI translation system that delivers accurate, professional English-to-German translation through two interfaces: a consumer-facing web application and a developer-focused CLI tool with advanced translation quality scoring.
+---
+## Table of Contents
 
+- [Background](#Background)
+- [System Architecture](#System_Architecture)
+- [Installation](#installation)
+- [Usage](#usage)
+- [API](#api)
+- [Roadmap](#roadmap)
+- [License](#license)
 ---
 
-## Why This Project Exists
+## Background
 
 Most general-purpose LLMs (GPT-4, Perplexity, etc.) produce casual, inconsistent translations that are unsuitable for professional or technical documents. GoodGute is built around a domain-specific neural machine translation model — Helsinki-NLP's `opus-mt-en-de` — that is purpose-trained for English→German translation and produces consistent, formal output every time.
 
@@ -17,7 +26,7 @@ Perplexity API is used separately as a **translation quality evaluator**, not as
 
 ---
 
-## System Architecture
+## System_Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -61,9 +70,56 @@ Perplexity API is used separately as a **translation quality evaluator**, not as
 
 ---
 
-## Translation Model: Why Helsinki-NLP opus-mt-en-de?
+## Model Selection: Why Helsinki-NLP opus-mt-en-de Over GPT?
 
-This was a deliberate technical choice over using a general-purpose LLM:
+### Real-World Comparison Test
+
+The following comparison is based on hands-on testing with literary prose — a deliberately challenging input because it contains figurative language, rhythm, and structure that stress-tests translation consistency.
+
+**Input text:**
+```
+The sun rises quietly over the distant hills, spilling soft golden light across the waking earth.
+Long before people awake, the birds fill the air with a gentle chorus.
+Bright stars twinkle in the velvet sky, shimmering like scattered diamonds in the quiet of the night.
+```
+
+**opus-mt-en-de output:**
+```
+Die Sonne geht leise über den fernen Hügeln auf und verschüttet sanftes goldenes Licht über die Erde.
+Lange bevor die Menschen erwachen, füllen die Vögel die Luft mit einem sanften Chor.
+Helle Sterne funkeln am Samthimmel, schimmernd wie verstreute Diamanten in der Stille der Nacht.
+```
+
+**GPT-5.2 output:**
+```
+Yes—your German version is natural and grammatically correct; there isn't a single "only right" 
+translation for literary lines like these. Here are two polished options...
+
+Option A (very close to yours): Die Sonne geht still über den fernen Hügeln auf...
+Option B (a bit more literary): Still steigt die Sonne über den fernen Hügeln empor...
+
+If you tell me whether you want it to sound more "poetic" or more "plain," I can tune word 
+choices (e.g., samtig vs. samten, ergießt vs. breitet aus).
+```
+
+### What This Test Reveals
+
+The difference is immediate and significant from a **production engineering perspective**:
+
+opus-mt-en-de returned **pure translated text** — directly parseable, no wrapping, no explanation, consistent format every time. Pipe it into any downstream system and it works.
+
+GPT returned **a conversation** — commentary, multiple options, follow-up questions, meta-discussion about word choices. For a human reader this is helpful. For a production translation pipeline, it is a parsing nightmare. The actual translation is buried inside prose that varies in structure with every request.
+
+### Comparison Table
+
+| Dimension | opus-mt-en-de | GPT-4 / Perplexity |
+|-----------|--------------|-------------------|
+| Output consistency | High — pure translated text, fixed format | Unpredictable — may include explanations, options, or follow-up questions |
+| Output parseability | Direct string, immediately usable | Requires extra parsing logic; structure varies per response |
+| Professional text accuracy | Strong — trained on formal parallel corpora | Prompt-dependent; varies across model versions |
+| Inference cost | Low — small dedicated model | High — large model API billed per token |
+| Suitable for production pipeline | ✓ | Requires significant additional engineering |
+| Role in GoodGute | Core translation engine | Translation quality evaluator (scoring only) |
 
 **The problem with GPT/LLMs for translation:**
 - Output style is inconsistent — sometimes formal, sometimes casual
@@ -76,41 +132,83 @@ This was a deliberate technical choice over using a general-purpose LLM:
 - Lightweight inference compared to large general-purpose models
 - Well-suited for professional document translation where formality and accuracy matter
 
+### Design Decision
+
+This is why GoodGute uses a **two-model architecture**:
+
+- **opus-mt-en-de** handles all translation — deterministic, parseable, cost-efficient
+- **Perplexity API** handles quality evaluation only (CLI `score` command) — where conversational, analytical output is actually what you want
+
+### Using the right tool for each job rather than one general-purpose model for everything is the core engineering decision behind this architecture.
 ---
 
 ## Features
 
-### Web Application (`goodgute.app`)
+### Web Application ([goodgute.app](https://www.goodgute.app/))
 - Real-time English→German text translation
 - Clean, minimal UI designed for non-technical users
-- Translation history panel
-- Document translation support
+- Low wait time - stream loading with typing effects, better user experience
+- Cache management system - using cache automatically and users can delete cache manually
 
-### CLI Tool (`pip install goodgute`)
+### CLI Tool ([goodgute.dev](https://www.goodgute.dev/))
+- Real-time English→German text translation
+- Document translation support
+- Batch loading - Built for translating long, multi-paragraph text in one go
+- Cache management system
+
+### Pypl ([Pypl](https://pypi.org/project/goodgute/))
+
+## Install by Python(Ver 3.9 or above) and Conda
+```bash
+pip install --upgrade --user goodgute
+```
+
+## Install on macOS and Linux
+```bash
+curl -fsSL https://goodgute.dev/install | bash
+```
+
 Designed for developers and power users:
 
+
+![Demo](https://github.com/user-attachments/assets/57125b1d-9de4-4e88-a2b9-a903a4ed2d74)
 ```bash
+# Commands help
+goodgute -h
+
+# goodgute logo+usage+version
+goodgute
+
+# goodgute access web ui
+goodgute --ui
+
+# goodgute access web-dev ui
+goodgute --ui-dev
+
 # Basic translation
-goodgute translate "The contract will expire on 31st December."
+goodgute -t "Hello, World!"
+
+# Basic translation with toggling on the cache and verbose mode
+goodgute -t "Hello, World!" --cache --verbose
 
 # Translate entire files
-goodgute translate --file contract.pdf
-goodgute translate --file report.docx
-goodgute translate --file notes.txt
+goodgute -f --format pdf -i 'contract.pdf' -o 'output.pdf'
+goodgute -f --format docx -i 'reports.docx' -o 'output.docx'
+goodgute -f --format txt -i 'notes.txt' -o 'output.txt'
 
-# Developer mode: shows stats, latency, token counts
-goodgute translate -D "Hello world"
+# Developer mode: shows translation stats(cmd_config, API_usage, hit_rate, para_num, words_count, etc), latency, whole Translation Execution Time 
+goodgute --format txt -i 'notes.txt' -o 'output.txt' --cache --verbose -D --time -s
 
 # Quality scoring via Perplexity API
-goodgute score "original text" "translated text"
+goodgute -q "Hello, World!"
 
 # Cache management
-goodgute cache --clear
+goodgute -t "Hello, World!" -D --cache-clean
 ```
 
 **Developer mode (`-D` flag)** outputs:
 - Source and target token counts
-- Inference latency (ms)
+- Inference latency / Translation Execution Time
 - Cache hit/miss status
 - Runtime diagnostics
 
@@ -492,34 +590,11 @@ The current stack is a working prototype. A production-grade version would addre
 
 ---
 
-## Running Locally
 
-### Backend
-```bash
-git clone https://github.com/PaddyZz/goodgute
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
-
-### CLI
-```bash
-pip install goodgute
-goodgute --help
-```
-
-### Web
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
----
 
 ## About
 
-Built by [Paddy Zhao](https://paddyzz.github.io/) — ML/MLOps engineer based in Sydney, Australia.
+Built by [Paddy Zhao](https://paddyzz.github.io/) — Software Engineer based in Sydney, Australia.
 
 - Personal site: [paddyzz.github.io](https://paddyzz.github.io/)
 - LinkedIn: [linkedin.com/in/jiahe-paddy-zhao-213b24300](https://www.linkedin.com/in/jiahe-paddy-zhao-213b24300)
