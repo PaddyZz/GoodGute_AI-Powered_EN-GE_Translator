@@ -11,11 +11,13 @@ GoodGute is a full-stack AI translation system that delivers accurate, professio
 
 - [Background](#Background)
 - [System Architecture](#System_Architecture)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API](#api)
-- [Roadmap](#roadmap)
-- [License](#license)
+- [Tech Stack Used](#Tech_Stack)
+- [Model_Selection](#model-selection-why-helsinki-nlp-opus-mt-en-de-over-gpt)
+- [Features](#Features)
+- [Engineering Challenges & Design Decisions](#engineering-challenges--design-decisions)
+- [Honest notes](#known-limitations-and-honest-engineering-notes)
+- [Planned Architecture Upgrade](#planned-architecture-upgrade)
+- [About](#about)
 ---
 
 ## Background
@@ -57,7 +59,7 @@ Perplexity API is used separately as a **translation quality evaluator**, not as
 
 ---
 
-## Tech Stack
+## Tech_Stack
 
 | Layer | Technology | Reason |
 |-------|-----------|--------|
@@ -70,7 +72,7 @@ Perplexity API is used separately as a **translation quality evaluator**, not as
 
 ---
 
-## Model Selection: Why Helsinki-NLP opus-mt-en-de Over GPT?
+## Model_Selection: Why Helsinki-NLP opus-mt-en-de Over GPT?
 
 ### Real-World Comparison Test
 
@@ -149,6 +151,12 @@ This is why GoodGute uses a **two-model architecture**:
 - Clean, minimal UI designed for non-technical users
 - Low wait time - stream loading with typing effects, better user experience
 - Cache management system - using cache automatically and users can delete cache manually
+
+![GoodGute screenshot](https://raw.githubusercontent.com/PaddyZz/GoodGute_AI-Powered_EN-GE_Translator/main/img/goodgute_web_1.webp)
+
+![GoodGute screenshot](https://raw.githubusercontent.com/PaddyZz/GoodGute_AI-Powered_EN-GE_Translator/main/img/goodgute_web_2.webp)
+
+![GoodGute screenshot](https://raw.githubusercontent.com/PaddyZz/GoodGute_AI-Powered_EN-GE_Translator/main/img/goodgute_web_3.webp)
 
 ### CLI Tool ([goodgute.dev](https://www.goodgute.dev/))
 - Real-time English→German text translation
