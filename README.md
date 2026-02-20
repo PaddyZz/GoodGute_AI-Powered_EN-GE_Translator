@@ -158,6 +158,9 @@ This is why GoodGute uses a **two-model architecture**:
 
 ![GoodGute screenshot](https://raw.githubusercontent.com/PaddyZz/GoodGute_AI-Powered_EN-GE_Translator/main/img/goodgute_web_3.webp)
 
+![GoodGute screenshot](https://raw.githubusercontent.com/PaddyZz/GoodGute_AI-Powered_EN-GE_Translator/main/img/goodgute_api_1.webp)
+
+
 ### CLI Tool ([goodgute.dev](https://www.goodgute.dev/))
 - Real-time English→German text translation
 - Document translation support
