@@ -70,7 +70,82 @@ Perplexity API is used separately as a **translation quality evaluator**, not as
 | Translation Model | Helsinki-NLP/opus-mt-en-de (HuggingFace) | Purpose-built NMT model, consistent formal output |
 | Quality Scoring | Perplexity API | LLM-based evaluation of translation accuracy and fluency |
 
+
+## Why This Tech Stack? — Architecture Decision Record
+
+> **Why Python + FastAPI + Railway + SQLite3 + Vercel instead of Java + Spring Boot + AWS + Nginx + Redis + PostgreSQL?**
+
+This section documents the engineering rationale behind the current stack from three angles: use-case fit, current trade-offs, and the future upgrade path.
+
 ---
+
+### Part 1 — Use-Case Fit: Why the Current Stack Makes Sense Right Now
+
+#### This Product Is an AI API Aggregation Layer
+
+GoodGute's core workload is orchestrating external AI APIs — sending text to HuggingFace's `opus-mt-en-de` and receiving translated results, then optionally forwarding to Perplexity API for quality scoring. This is fundamentally an **I/O-bound, API-proxying workload**, not a computation-heavy or transaction-heavy one.
+
+That changes everything about what the right stack looks like.
+
+**Python is the natural home for AI/ML API integration.** Libraries like `nltk` (for sentence tokenization and text chunking), `pydantic` (for request/response validation), and the HuggingFace `transformers` ecosystem are Python-native. There is no equivalent first-class ecosystem in Java or Node for this kind of NLP preprocessing pipeline. Splitting raw text on `\n`, detecting sentence boundaries, chunking paragraphs to respect the `opus-mt-en-de` 1250-character input limit — all of this is handled cleanly by Python's text processing libraries with minimal boilerplate.
+
+**FastAPI is performance-competitive with Spring Boot for I/O-bound workloads.** For CPU-bound workloads under heavy load, Java + Spring Boot has a real throughput advantage. But for I/O-bound work — where the bottleneck is waiting for external APIs to respond, not executing local computation — FastAPI with Uvicorn (ASGI, async) achieves comparable throughput. The latency difference between the two frameworks is negligible when the dominant cost is an external API round-trip of 500ms–3s. FastAPI also provides automatic OpenAPI documentation generation and Pydantic-native validation out of the box, reducing boilerplate significantly.
+
+**Railway provides container-based deployment with zero infrastructure setup.** Railway builds from the repo directly, provisions a container, and exposes a fixed external URL. This gives GoodGute a stable, publicly addressable backend endpoint with no manual server configuration, no VPC setup, no security group rules, no AMI management. For a prototype stage product with low traffic, Railway eliminates an entire category of operational overhead. The fixed external API latency to HuggingFace is also more predictable from Railway than from a self-managed EC2 instance with misconfigured networking.
+
+**SQLite3 is entirely sufficient for the current traffic volume.** GoodGute's database workload is: write a cached translation result, read it back on cache hit, delete stale entries. These are infrequent, low-volume operations with no concurrent write contention at prototype scale. SQLite3 handles this without issue. There are no complex JOIN queries, no high-frequency writes, no need for MVCC. For a single-instance prototype, SQLite3 is not a liability — it is the correct tool.
+
+**Vercel handles the frontend with zero configuration.** Next.js + Vercel is a first-class combination. CDN distribution, SSL, preview deployments, and edge caching are all handled automatically. The alternative — AWS Amplify or CloudFront + S3 — requires meaningful configuration to achieve the same result.
+
+**Economic and development cost.** Running this stack costs near-zero in infrastructure fees during prototype validation. The team is small (one developer), iteration speed matters more than horizontal scalability, and the user base is not yet at a scale where infrastructure costs are meaningful. Building on AWS with EC2, RDS (PostgreSQL), ElastiCache (Redis), and an Application Load Balancer would add significant fixed monthly costs before a single paying user exists, as well as requiring substantially more DevOps time to configure and maintain.
+
+---
+
+### Part 2 — Current Limitations: Where the Stack Shows Strain
+
+The current stack has known failure modes that become real problems as traffic grows.
+
+**SQLite3 write-locking under concurrent load.** SQLite3 uses a single write lock for the entire database file. Under concurrent multi-user load — multiple users submitting translations simultaneously — write operations queue behind each other. In production, this manifested as translation results failing to propagate correctly: simultaneous users would not see their cached translations because write locks were being held by competing requests. In high-frequency write scenarios (many users translating long documents in parallel), SQLite3 effectively becomes a bottleneck and can stall or stop the translation pipeline entirely. PostgreSQL's MVCC (Multi-Version Concurrency Control) eliminates this — readers never block writers, writers never block readers.
+
+**No in-memory caching layer.** Currently, all cache lookups hit SQLite3 on disk. For frequently translated phrases (short, common expressions), the cache hit path still involves disk I/O. Redis would serve these lookups from memory at sub-millisecond latency, dramatically reducing per-request overhead under concurrent load. More critically, Redis supports atomic operations and TTL-based expiry natively, which makes distributed caching safe in multi-instance deployments — something SQLite3 cannot support at all across multiple backend pods.
+
+**No horizontal scaling.** The current deployment is a single Railway container. If traffic spikes, there is no mechanism to add backend instances. There is no reverse proxy (Nginx) to load-balance across instances, and SQLite3 as the database cannot be shared across multiple processes on different machines. The stack is inherently single-instance. This is acceptable at prototype scale but becomes a hard ceiling.
+
+**No async message queue.** When a user submits a long document for translation, the backend makes sequential blocking calls to HuggingFace's inference endpoint for each paragraph. Under a traffic spike, these API calls stack up in the request handler, increasing response latency for all concurrent users. There is no buffering layer — no way to decouple request intake from translation processing. A message queue (Apache Kafka or AWS SQS) would act as a buffer, absorbing burst traffic and feeding translation jobs to the HuggingFace endpoint at a controlled rate.
+
+**No enterprise-grade transaction guarantees.** GoodGute currently has no complex transactional requirements, but any future feature involving user accounts, billing, or collaborative session state would require strong ACID transactions. SQLite3's locking model is not suitable for this. Spring Boot + PostgreSQL is the standard enterprise stack for strong transaction guarantees at scale — FastAPI + PostgreSQL achieves the same transactional safety with lower overhead for Python-native deployments.
+
+---
+
+### Part 3 — Future Architecture Upgrade Path
+
+The current stack is a working, validated prototype. The upgrade path below addresses each identified limitation in a deliberate sequence, ordered by impact-to-cost ratio.
+
+| Component | Current | Upgraded | Problem Solved |
+|-----------|---------|----------|----------------|
+| Hosting | Railway (single container) | AWS EC2 (multi-instance) | Horizontal scaling, production SLA |
+| Reverse proxy / Load balancing | None | Nginx | Distributes traffic across instances, SSL termination |
+| Cache | SQLite3 (disk) | Redis (in-memory) | Sub-millisecond cache hits, concurrent-safe, TTL support |
+| Database | SQLite3 | PostgreSQL | MVCC eliminates write-lock contention, ACID transactions |
+| Async message queue | None | Apache Kafka | Decouples intake from processing, buffers traffic spikes |
+| Containerisation | None | Docker + Kubernetes | Auto-scaling, rolling deploys, consistent environments |
+
+**Nginx** sits in front of the backend as a reverse proxy, terminating SSL, handling connection keep-alive, and distributing requests across multiple FastAPI/Uvicorn instances via round-robin or least-connections routing. This is what enables horizontal scaling without changing application code.
+
+**Redis** replaces SQLite3 as the primary cache. Translation results keyed by paragraph SHA-256 hash are stored in memory with configurable TTL. Under concurrent load, Redis handles thousands of lookups per second without disk I/O. Redis also enables cache sharing across multiple backend instances — a cache hit in one pod is visible to all pods, which is impossible with per-instance SQLite3 files.
+
+**PostgreSQL** replaces SQLite3 as the persistent store. MVCC means concurrent reads and writes no longer block each other. Long-running translation sessions with many paragraph writes no longer risk the read-write lock collisions observed in production with SQLite3. PostgreSQL also provides row-level locking, proper index support, and the ability to run complex analytical queries on translation history if that becomes a product requirement.
+
+**Apache Kafka** decouples the HTTP request handler from the translation execution pipeline. When a user submits a document, the backend writes a job to a Kafka topic and immediately returns a `202 Accepted` response with a job ID. A separate consumer service reads from the Kafka topic and executes translations against HuggingFace, writing results back to PostgreSQL. The frontend polls for job completion (or receives updates via WebSocket). This architecture prevents the HuggingFace inference endpoint from being overwhelmed by burst traffic, enables retry logic for failed translation jobs, and makes the system resilient to HuggingFace cold-start latency without blocking the HTTP response cycle.
+
+**Docker + Kubernetes** wraps the entire backend in containers and manages scaling automatically. Kubernetes HPA (Horizontal Pod Autoscaler) adds FastAPI instances as CPU/memory thresholds are crossed and removes them when traffic drops. Rolling deployments allow zero-downtime updates. The same container image runs in development, staging, and production with identical dependencies.
+
+The upgrade is not a rewrite — it is an incremental migration. FastAPI + Python remains the application layer. The data layer (SQLite3 → PostgreSQL + Redis) and the infrastructure layer (Railway → AWS EC2 + Nginx + Kubernetes) are replaced progressively as traffic and product requirements justify the investment.
+
+---
+---
+
+
 
 ## Model_Selection: Why Helsinki-NLP opus-mt-en-de Over GPT?
 
@@ -575,29 +650,6 @@ def handle_longText(text: list, session_id: str):
 **SQLite concurrency:** SQLite3's write-locking behaviour causes translation results to fail to propagate correctly under concurrent multi-user load. This was observed in production — simultaneous users would not see each other's translation outputs correctly. This is a known limitation of SQLite for concurrent web applications.
 
 **No image OCR:** Image translation (scanning text within images) is listed as a planned feature but is not currently implemented.
-
----
-
-## Planned Architecture Upgrade
-
-The current stack is a working prototype. A production-grade version would address the concurrency and scalability limitations with the following upgrade path:
-
-| Component | Current | Upgraded |
-|-----------|---------|----------|
-| Hosting | Railway | AWS EC2 |
-| Reverse proxy / Load balancing | None | Nginx |
-| Cache | SQLite3 | Redis |
-| Database | SQLite3 | PostgreSQL |
-| Async message queue | None | Apache Kafka |
-| Containerisation | None | Docker + Kubernetes |
-
-**What each upgrade solves:**
-
-- **Nginx:** Reverse proxy and load balancing across multiple backend instances, enabling horizontal scaling
-- **Redis:** In-memory caching handles high-concurrency translation lookups without database I/O bottlenecks
-- **PostgreSQL:** MVCC (Multi-Version Concurrency Control) eliminates SQLite's read-write locking problem, enabling reliable concurrent writes at scale
-- **Apache Kafka:** Decouples API request intake from translation processing — acts as a buffer under traffic spikes (load levelling), enables async processing, and prevents the HuggingFace inference endpoint from being overwhelmed by burst traffic
-- **Docker + Kubernetes:** Containerised deployments enable consistent environments, auto-scaling, and zero-downtime rolling updates
 
 ---
 
